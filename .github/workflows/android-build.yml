@@ -38,8 +38,11 @@ jobs:
           key: ktlint-${{ env.KTLINT_VERSION }}-${{ env.KTLINT_SHA256 }}
 
       - name: ktlint
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ ! -f ktlint ]; then
+            gh release download "${KTLINT_VERSION}" --repo pinterest/ktlint --pattern ktlint --clobber || \
             curl -sSfL --retry 5 --retry-delay 3 -o ktlint "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
             echo "${KTLINT_SHA256}  ktlint" | sha256sum -c -
             chmod +x ktlint
