@@ -1,6 +1,6 @@
-# Interview Copilot (Android)
+# Interview-Ai-Helper-V3.2
 
-A voice assistant that answers on your phone. You speak, check the text, tap **Generate Answer**, and a local
+Interview Copilot (Android) - A voice assistant that answers on your phone. You speak, check the text, tap **Generate Answer**, and a local
 model streams the answer. Everything (speech and answers) can run fully offline.
 
 Native Android app: Kotlin + Jetpack Compose, with llama.cpp (answers) and whisper.cpp (speech) via JNI.
@@ -10,10 +10,10 @@ The UI follows Apple's Human Interface Guidelines in a single pastel palette; th
 
 `Idle -> Listening -> Transcribed -> Generating -> Answered -> Idle`
 
-1. Tap the mic and speak. Live partial text appears in the box while you talk.
-2. The final text stays in an editable box. Fix any word you like.
+1. Tap the mic and speak. Listening is continuous: pauses never stop it, and each phrase is appended to the box.
+2. Tap the mic again to stop. The text stays in an editable box. Fix any word you like, or tap **Clear**.
 3. Nothing is generated. The app waits.
-4. Tap **Generate Answer** (disabled when the box is empty or an answer is running). **Stop** cancels.
+4. Tap **Generate Answer** (also works while still listening; disabled when the box is empty or an answer is running). **Stop** cancels.
 5. The answer streams token by token for that text only.
 6. When it finishes, the mic and text box reset for the next question.
 
@@ -87,8 +87,19 @@ Actions are pinned to commit SHAs, Gradle 8.9, JDK 17, NDK 27.2.12479018, CMake 
 
 ```
 core/    pure logic: VoiceFlow, Vad, ThinkFilter, Checksum (no Android, unit-tested)
-voice/   AudioCapture, WhisperRecognizer, PlatformRecognizer, JNI wrapper
+voice/   AudioCapture, SegmentedRecognizer (continuous), PlatformRecognizer, JNI wrapper
 llm/     ModelCatalog, Recommender, DeviceProbe, ModelDownloader, LlamaEngine, JNI wrapper
 ui/      Theme (the only place colours are defined), Ios components, screens
 cpp/     CMake, llama.cpp + whisper.cpp JNI (sources fetched at build time, pinned)
 ```
+
+## Answer engines (v2.1)
+
+Top-left of the Assistant page: pick **Auto, Local, OpenRouter, Google or Groq**. Keys and models are entered in the **AI** tab
+(each has a Test button). Auto tries Groq, Google, OpenRouter, then the on-device model, skipping engines that just failed.
+Speech: **Settings > Speech** (Auto uses Groq Whisper if a Groq key exists, then on-device Whisper, then the phone recognizer).
+
+## Personal tab
+
+Upload the 10th, 12th and college marksheets (photo or PDF). Marks are read on the phone with ML Kit text recognition, the
+percentage or CGPA is calculated, and every value can be corrected by hand.

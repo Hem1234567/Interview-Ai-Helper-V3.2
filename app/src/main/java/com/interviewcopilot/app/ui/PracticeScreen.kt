@@ -26,7 +26,7 @@ import com.interviewcopilot.app.logic.Bank
 import com.interviewcopilot.app.vm.CopilotVM
 
 @Composable
-fun PracticeScreen(vm: CopilotVM) {
+fun PracticeScreen(vm: CopilotVM, onBack: (() -> Unit)? = null) {
     val c = LocalAppColors.current
     var topic by remember { mutableStateOf("Java") }
     var index by remember { mutableIntStateOf(0) }
@@ -35,7 +35,7 @@ fun PracticeScreen(vm: CopilotVM) {
     val question = questions.getOrElse(index % questions.size.coerceAtLeast(1)) { "" }
     val scores = vm.practiceScores()
 
-    LargeTitleScreen("Practice") {
+    LargeTitleScreen("Practice", onBack = onBack, backLabel = "Settings") {
         if (scores.isNotEmpty()) {
             Txt("Answered ${scores.size} · average ${"%.1f".format(scores.average())}/10", Type.subhead, c.text2, Modifier.padding(bottom = 10.dp))
         }

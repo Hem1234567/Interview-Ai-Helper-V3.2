@@ -14,7 +14,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +57,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.interviewcopilot.app.core.EngineOrder
 import com.interviewcopilot.app.core.Stage
 import com.interviewcopilot.app.llm.EngineState
 import com.interviewcopilot.app.logic.Prompts
@@ -66,7 +66,7 @@ import com.interviewcopilot.app.voice.SttLanguages
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Unit) {
+fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Unit, onOpenEngines: () -> Unit) {
     val c = LocalAppColors.current
     val ctx = LocalContext.current
     val strongHaptic = rememberStrongHaptic()
@@ -85,6 +85,7 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
 
     LargeTitleScreen(
         title = "Assistant",
+        leading = { EnginePill(vm, onOpenEngines) },
         actions = { CircleButton(Sym.gear, "Settings", size = 36.dp, onClick = onOpenSettings) },
     ) {
         // Mode picker
@@ -102,7 +103,7 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
         }
         Spacer(Modifier.height(14.dp))
 
-        if (!vm.hasLocalModel && vm.g("orKey").isBlank() && vm.g("geminiKey").isBlank()) {
+        if (!vm.engineReady("Auto")) {
             GetModelCard(vm, onOpenModels)
             Spacer(Modifier.height(14.dp))
         }
@@ -125,7 +126,7 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt(
                         when (v.stage) {
-                            Stage.Listening -> "Listening…"
+                            Stage.Listening -> if (vm.finishing) "Finishing your words…" else "Listening… pauses are fine"
                             Stage.Transcribed -> "Review, edit, then generate"
                             Stage.Generating -> "Answering"
                             else -> "Your question"
@@ -134,16 +135,13 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
                         c.text2,
                         Modifier.weight(1f),
                     )
-                    if (v.text.isNotEmpty() && v.stage != Stage.Generating && v.stage != Stage.Listening) {
-                        Txt("Clear", Type.footnote, c.text, Modifier.pressable { vm.editText("") }.padding(4.dp))
-                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 val listening = v.stage == Stage.Listening
                 IosField(
-                    value = if (listening) v.partial else v.text,
+                    value = if (listening) v.liveText else v.text,
                     onChange = { vm.editText(it) },
-                    hint = if (listening) "Speak now…" else "Tap the mic and speak, or type here",
+                    hint = if (listening) "Speak now. Your words appear here as you talk" else "Tap the mic and speak, or type here",
                     singleLine = false,
                     minLines = 3,
                     enabled = v.stage == Stage.Idle || v.stage == Stage.Transcribed,
@@ -157,6 +155,7 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
                     Spacer(Modifier.weight(1f))
                     Txt(sttLabel(vm), Type.caption, c.text2, Modifier.width(88.dp), maxLines = 2, align = TextAlign.End)
                 }
+                vm.speechNotice?.let { Txt(it, Type.footnote, c.text2, Modifier.padding(top = 8.dp)) }
             }
         }
         LanguageList(langOpen, vm) { langOpen = false }
@@ -165,16 +164,21 @@ fun HomeScreen(vm: CopilotVM, onOpenSettings: () -> Unit, onOpenModels: () -> Un
         // Step 4: only the button generates an answer
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             IosButton(
-                "Generate Answer",
+                if (vm.finishing) "Finishing…" else "Generate Answer",
                 Modifier.weight(1f),
                 kind = ButtonKind.Success,
-                enabled = v.canGenerate,
+                enabled = v.canGenerate && !vm.finishing,
                 icon = Sym.sparkles,
             ) { strongHaptic(); vm.generateTapped() }
-            AnimatedVisibility(v.canStop, enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start), exit = fadeOut()) {
-                IosButton("Stop", Modifier.padding(start = 0.dp).width(110.dp), kind = ButtonKind.Danger, icon = Sym.stop) {
+            if (v.canStop) {
+                IosButton("Stop", Modifier.width(104.dp), kind = ButtonKind.Danger, icon = Sym.stop) {
                     strongHaptic()
                     vm.stopGeneration()
+                }
+            } else {
+                IosButton("Clear", Modifier.width(104.dp), kind = ButtonKind.Secondary, enabled = v.canClear, icon = Sym.xmark) {
+                    strongHaptic()
+                    vm.clearText()
                 }
             }
         }
@@ -345,8 +349,9 @@ private fun AnswerCard(vm: CopilotVM) {
                     AnswerContent(v.answer, v.stage == Stage.Generating)
                     if (vm.firstTokenMs > 0 && vm.engineUsed.isNotBlank()) {
                         Spacer(Modifier.height(10.dp))
-                        Txt("${vm.engineUsed} · first words in ${"%.1f".format(vm.firstTokenMs / 1000.0)} s", Type.caption, c.text2)
+                        Txt("${EngineOrder.display(vm.engineUsed)} · first words in ${"%.1f".format(vm.firstTokenMs / 1000.0)} s", Type.caption, c.text2)
                     }
+                    if (vm.engineNotice.isNotBlank()) Txt(vm.engineNotice, Type.caption, c.text2)
                 }
             }
         }
@@ -386,5 +391,46 @@ private fun styled(raw: String, cursor: Boolean, cursorColor: Color): AnnotatedS
             if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(part) } else append(part)
         }
         if (cursor) withStyle(SpanStyle(color = cursorColor)) { append(" ▍") }
+    }
+}
+
+/** Top-left engine picker: shows which AI is answering, opens the list on tap. */
+@Composable
+private fun EnginePill(vm: CopilotVM, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(c.surface).pressable(onClick = onClick).padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sf(Sym.cpu, c.text, 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Txt(EngineOrder.display(vm.selectedEngine), Type.subhead, c.text, maxLines = 1)
+        Spacer(Modifier.width(4.dp))
+        Sf(Sym.chevronUpDown, c.text2, 16.dp, description = "Change AI engine")
+    }
+}
+
+/** Bottom sheet with the engines. Lives at the app root so it sits above the tab bar. */
+@Composable
+fun EngineSheet(vm: CopilotVM, visible: Boolean, onDismiss: () -> Unit, onOpenAiTab: () -> Unit) {
+    val c = LocalAppColors.current
+    BottomSheet(visible, onDismiss) {
+        Txt("Answer engine", Type.headline, c.text, Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Card {
+            EngineOrder.all.forEachIndexed { i, name ->
+                ListRow(
+                    EngineOrder.display(name),
+                    subtitle = vm.engineStatus(name),
+                    divider = i != EngineOrder.all.lastIndex,
+                    onClick = {
+                        vm.selectEngine(name)
+                        onDismiss()
+                    },
+                    trailing = { if (vm.selectedEngine == name) Sf(Sym.check, c.text, 20.dp) },
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Txt("Keys and models", Type.subhead, c.text, Modifier.pressable { onDismiss(); onOpenAiTab() }.padding(8.dp))
     }
 }

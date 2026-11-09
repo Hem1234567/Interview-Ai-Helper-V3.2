@@ -17,7 +17,7 @@ import com.interviewcopilot.app.llm.ModelCatalog
 import com.interviewcopilot.app.vm.CopilotVM
 import com.interviewcopilot.app.voice.SttLanguages
 
-enum class SettingsPage { Root, LocalModels, WhisperModels, Language, Style, Online, Personal }
+enum class SettingsPage { Root, LocalModels, WhisperModels, Language, Style, Practice, Jobs }
 
 private val LENGTHS = listOf("Short" to "Fast", "Balanced" to "Standard", "Detailed" to "Deep")
 private val STYLES = listOf("Concise", "Confident", "STAR", "Simple English")
@@ -33,8 +33,8 @@ fun SettingsHost(vm: CopilotVM, initial: SettingsPage, onClose: () -> Unit) {
         SettingsPage.WhisperModels -> SpeechModelsScreen(vm, back)
         SettingsPage.Language -> LanguagePage(vm, back)
         SettingsPage.Style -> StylePage(vm, back)
-        SettingsPage.Online -> OnlinePage(vm, back)
-        SettingsPage.Personal -> PersonalPage(vm, back)
+        SettingsPage.Practice -> PracticeScreen(vm, onBack = back)
+        SettingsPage.Jobs -> JobsScreen(vm, onBack = back)
     }
 }
 
@@ -59,14 +59,6 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
                     subtitle = selected?.name ?: "No model downloaded",
                 )
                 ListRow(
-                    "Online engines",
-                    icon = Sym.globe,
-                    iconBg = c.secondary,
-                    chevron = true,
-                    onClick = { go(SettingsPage.Online) },
-                    subtitle = "OpenRouter, Gemini",
-                )
-                ListRow(
                     "Answer style",
                     icon = Sym.sparkles,
                     iconBg = c.accent,
@@ -75,12 +67,21 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
                     subtitle = vm.g("style"),
                 )
                 ListRow(
-                    "Résumé and vocabulary",
-                    icon = Sym.person,
+                    "Practice",
+                    icon = Sym.book,
+                    iconBg = c.success,
+                    chevron = true,
+                    onClick = { go(SettingsPage.Practice) },
+                    subtitle = "Practice questions with scoring",
+                )
+                ListRow(
+                    "Jobs",
+                    icon = Sym.briefcase,
                     iconBg = c.success,
                     chevron = true,
                     divider = false,
-                    onClick = { go(SettingsPage.Personal) },
+                    onClick = { go(SettingsPage.Jobs) },
+                    subtitle = "Job descriptions that tailor answers",
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -88,17 +89,10 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
                 Box(Modifier.padding(16.dp)) {
                     Segmented(LENGTHS.map { it.first }, lengthLabel, { l -> vm.put("speed", LENGTHS.first { it.first == l }.second) })
                 }
-                ListRow("Primary engine", divider = false, subtitle = "Falls back to the next ready engine if it fails")
-                Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                    Segmented(listOf("Local", "OpenRouter", "Gemini"), vm.g("provider"), { vm.put("provider", it) })
-                }
             }
             SectionFooter("Short answers start fastest. Detailed answers take longer.")
             Spacer(Modifier.height(12.dp))
             Card {
-                ListRow("Auto fallback", subtitle = "Use another engine if the primary is slow", trailing = {
-                    IosSwitch(vm.b("fallback")) { vm.put("fallback", it.toString()) }
-                })
                 ListRow("Conversation memory", subtitle = "Off: every question is answered on its own", divider = false, trailing = {
                     IosSwitch(vm.b("memory")) { vm.put("memory", it.toString()) }
                 })
@@ -107,7 +101,7 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
             SectionHeader("Speech")
             Card {
                 Box(Modifier.padding(16.dp)) {
-                    Segmented(listOf("Auto", "Whisper", "Phone"), when (vm.g("sttEngine")) { "Platform" -> "Phone"; else -> vm.g("sttEngine") }, {
+                    Segmented(listOf("Auto", "Whisper", "Groq", "Phone"), when (vm.g("sttEngine")) { "Platform" -> "Phone"; else -> vm.g("sttEngine") }, {
                         vm.put("sttEngine", if (it == "Phone") "Platform" else it)
                     })
                 }
@@ -130,7 +124,9 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
                 )
             }
             SectionFooter(
-                "Auto uses Whisper when a model is downloaded and the phone's recognizer otherwise. The microphone uses noise suppression, echo cancellation and auto gain, and silence is trimmed before transcription.",
+                "Auto uses Groq Whisper (most accurate, needs a Groq key in the AI tab), " +
+                    "then on-device Whisper, then the phone's recognizer. For the best offline " +
+                    "accuracy download Whisper Small. Listening continues through pauses until you stop it.",
             )
 
             SectionHeader("Appearance")
@@ -150,7 +146,7 @@ private fun SettingsRoot(vm: CopilotVM, onClose: () -> Unit, go: (SettingsPage) 
 
             SectionHeader("About")
             Card {
-                ListRow("Interview Copilot", subtitle = "Version 2.0 · ${ModelCatalog.models.size} on-device models", divider = false)
+                ListRow("Interview Copilot", subtitle = "Version 2.1 · ${ModelCatalog.models.size} on-device models", divider = false)
             }
             SectionFooter("Follow the rules of any interview or employer about AI assistance. Best used for practice and preparation.")
         }
@@ -195,32 +191,5 @@ private fun StylePage(vm: CopilotVM, onBack: () -> Unit) {
                 })
             }
         }
-    }
-}
-
-@Composable
-private fun OnlinePage(vm: CopilotVM, onBack: () -> Unit) {
-    LargeTitleScreen("Online engines", onBack = onBack, backLabel = "Settings") {
-        SectionHeader("OpenRouter")
-        IosField(vm.g("orKey"), { vm.put("orKey", it) }, "API key", secret = true)
-        Spacer(Modifier.height(8.dp))
-        IosField(vm.g("orModel"), { vm.put("orModel", it) }, "Model id, e.g. google/gemini-2.0-flash-001")
-        SectionHeader("Google Gemini")
-        IosField(vm.g("geminiKey"), { vm.put("geminiKey", it) }, "Google AI Studio API key", secret = true)
-        Spacer(Modifier.height(8.dp))
-        IosField(vm.g("geminiModel"), { vm.put("geminiModel", it) }, "Model id, e.g. gemini-2.0-flash")
-        SectionFooter("Optional. Keys are stored encrypted. Questions are sent to these services only when you choose them as the engine.")
-    }
-}
-
-@Composable
-private fun PersonalPage(vm: CopilotVM, onBack: () -> Unit) {
-    LargeTitleScreen("Résumé and vocabulary", onBack = onBack, backLabel = "Settings") {
-        SectionHeader("Résumé")
-        IosField(vm.g("resume"), { vm.put("resume", it) }, "Paste your résumé text", singleLine = false, minLines = 7)
-        SectionFooter("Used to personalise answers. Long text is shortened to keep answers fast.")
-        SectionHeader("Custom vocabulary")
-        IosField(vm.g("vocab"), { vm.put("vocab", it) }, "spring boot=Spring Boot", singleLine = false, minLines = 4)
-        SectionFooter("One rule per line, wrong=correct. Corrects transcription and helps Whisper spell your terms.")
     }
 }

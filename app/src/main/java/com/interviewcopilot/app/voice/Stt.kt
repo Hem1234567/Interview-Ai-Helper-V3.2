@@ -3,16 +3,29 @@ package com.interviewcopilot.app.voice
 /** Callbacks from a speech session. All are invoked on the main thread. */
 interface SttListener {
     fun onLevel(level: Float)
+
+    /** Words of the sentence being spoken right now (not final yet). */
     fun onPartial(text: String)
-    fun onFinal(text: String)
+
+    /** A finished piece of speech. Pauses never end the session; more pieces keep coming. */
+    fun onSegment(text: String)
+
+    /** Something went wrong with one piece but listening continues. */
+    fun onNotice(message: String)
+
+    /** The session is over (the user stopped it). Every piece has been delivered before this. */
+    fun onEnded()
     fun onError(message: String)
 }
 
-/** One push-to-talk capture. [stop] ends capture and still delivers a final result. */
+/** One continuous capture. [stop] ends capture, still delivers everything said, then calls onEnded. */
 interface SttSession {
     fun start()
     fun stop()
     fun cancel()
+
+    /** Forget everything heard but not yet delivered (the user pressed Clear) and keep listening. */
+    fun discard()
 }
 
 /** "auto" lets Whisper detect the language. */

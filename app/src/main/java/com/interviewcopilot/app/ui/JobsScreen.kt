@@ -19,14 +19,14 @@ import androidx.compose.ui.unit.dp
 import com.interviewcopilot.app.vm.CopilotVM
 
 @Composable
-fun JobsScreen(vm: CopilotVM) {
+fun JobsScreen(vm: CopilotVM, onBack: (() -> Unit)? = null) {
     val c = LocalAppColors.current
     var query by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     val shown = vm.jobs.filter { query.isBlank() || it.title.contains(query, true) || it.description.contains(query, true) }
 
-    LargeTitleScreen("Jobs") {
+    LargeTitleScreen("Jobs", onBack = onBack, backLabel = "Settings") {
         IosField(query, { query = it }, "Search saved jobs")
         Spacer(Modifier.height(14.dp))
         Card {

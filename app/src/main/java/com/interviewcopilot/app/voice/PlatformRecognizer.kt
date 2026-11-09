@@ -3,20 +3,29 @@ package com.interviewcopilot.app.voice
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import java.util.Locale
 
-/** Fallback: Android's built-in recognizer. Used until a Whisper model has been downloaded. */
+/**
+ * Fallback: Android's built-in recognizer. It ends on every silence, so it is restarted automatically and every
+ * finished phrase is appended: pauses never stop listening. Only [stop] ends the session.
+ */
 class PlatformRecognizer(
     private val ctx: Context,
     private val languageCode: String,
     private val listener: SttListener,
 ) : SttSession {
+    private val main = Handler(Looper.getMainLooper())
     private var rec: SpeechRecognizer? = null
     private var lastPartial = ""
-    private var delivered = false
+    private var stopRequested = false
+    private var finished = false
+    private var active = false
+    private var errorsInRow = 0
 
     private fun tag(): String =
         if (languageCode == "auto") Locale.getDefault().toLanguageTag() else languageCode
@@ -38,7 +47,7 @@ class PlatformRecognizer(
         }
 
         override fun onResults(results: Bundle?) {
-            finish(first(results) ?: lastPartial)
+            cycleDone(first(results) ?: lastPartial)
         }
 
         override fun onError(error: Int) {
@@ -48,7 +57,7 @@ class PlatformRecognizer(
                 }
 
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                    if (lastPartial.isNotBlank()) finish(lastPartial) else finish("")
+                    cycleDone(lastPartial)
                 }
 
                 SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> {
@@ -56,7 +65,14 @@ class PlatformRecognizer(
                 }
 
                 else -> {
-                    fail("Speech recognition failed (code $error).")
+                    active = false
+                    if (stopRequested) {
+                        finish()
+                    } else if (++errorsInRow > 4) {
+                        fail("Speech recognition failed (code $error).")
+                    } else {
+                        restartLater(300)
+                    }
                 }
             }
         }
@@ -65,17 +81,60 @@ class PlatformRecognizer(
     private fun first(b: Bundle?): String? =
         b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
 
-    private fun finish(text: String) {
-        if (delivered) return
-        delivered = true
+    private fun cycleDone(text: String) {
+        active = false
+        val t = text.trim()
+        lastPartial = ""
+        if (t.isNotBlank()) {
+            errorsInRow = 0
+            listener.onSegment(t)
+        }
+        if (stopRequested) finish() else restartLater(100)
+    }
+
+    private fun restartLater(ms: Long) {
+        main.postDelayed({
+            if (finished) return@postDelayed
+            if (stopRequested) finish() else startCycle()
+        }, ms)
+    }
+
+    private fun finish() {
+        if (finished) return
+        finished = true
+        destroy()
         listener.onLevel(0f)
-        listener.onFinal(text.trim())
+        listener.onEnded()
     }
 
     private fun fail(message: String) {
-        if (delivered) return
-        delivered = true
+        if (finished) return
+        finished = true
+        destroy()
         listener.onError(message)
+    }
+
+    private fun destroy() {
+        rec?.destroy()
+        rec = null
+    }
+
+    private fun startCycle() {
+        destroy()
+        val r = SpeechRecognizer.createSpeechRecognizer(ctx)
+        r.setRecognitionListener(callbacks)
+        rec = r
+        active = true
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, tag())
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.packageName)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3_000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3_000L)
+        }
+        r.startListening(intent)
     }
 
     override fun start() {
@@ -83,29 +142,28 @@ class PlatformRecognizer(
             fail("Speech recognition is not available on this phone.")
             return
         }
-        delivered = false
-        lastPartial = ""
-        val r = SpeechRecognizer.createSpeechRecognizer(ctx)
-        r.setRecognitionListener(callbacks)
-        rec = r
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, tag())
-            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.packageName)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1_200L)
-        }
-        r.startListening(intent)
+        finished = false
+        stopRequested = false
+        startCycle()
     }
 
     override fun stop() {
-        rec?.stopListening()
+        stopRequested = true
+        if (active) rec?.stopListening() else finish()
     }
 
     override fun cancel() {
-        delivered = true
-        rec?.destroy()
-        rec = null
+        finished = true
+        stopRequested = true
+        main.removeCallbacksAndMessages(null)
+        destroy()
+    }
+
+    override fun discard() {
+        lastPartial = ""
+        rec?.cancel()
+        active = false
+        listener.onPartial("")
+        if (!stopRequested) restartLater(100)
     }
 }

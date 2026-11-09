@@ -32,6 +32,9 @@ object Sym {
     val chevronLeft = icon("chevronLeft", "M15 5l-7 7 7 7")
     val chevronRight = icon("chevronRight", "M9 5l7 7-7 7")
     val chevronDown = icon("chevronDown", "M5 9l7 7 7-7")
+    val chevronUpDown = icon("chevronUpDown", "M8 9l4-4 4 4", "M8 15l4 4 4-4")
+    val upload = icon("upload", "M12 16V4", "M7 9l5-5 5 5", "M5 20h14")
+    val doc = icon("doc", "M7 3h8l4 4v14H7z", "M14 3v5h5", "M10 13h6", "M10 17h6")
     val gear = icon(
         "gear",
         "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",

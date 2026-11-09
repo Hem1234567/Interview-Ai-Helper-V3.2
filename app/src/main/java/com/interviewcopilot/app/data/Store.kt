@@ -28,16 +28,17 @@ data class JobProfile(
 
 object Defaults {
     val map: Map<String, String> = mapOf(
-        "provider" to "Local",
-        "fallback" to "true",
+        "provider" to "Auto",
         "orKey" to "",
-        "orModel" to "google/gemini-2.0-flash-001",
+        "orModel" to "meta-llama/llama-3.3-70b-instruct",
         "geminiKey" to "",
-        "geminiModel" to "gemini-2.0-flash",
+        "geminiModel" to "gemini-3.1-flash-lite",
+        "groqKey" to "",
+        "groqModel" to "llama-3.3-70b-versatile",
         "localModelId" to "",
         "whisperModelId" to "whisper-base",
         "sttEngine" to "Auto",
-        "sttLang" to "auto",
+        "sttLang" to "en",
         "memory" to "false",
         "theme" to "System",
         "style" to "Concise",
@@ -46,6 +47,9 @@ object Defaults {
         "resume" to "",
         "vocab" to "",
         "pscores" to "",
+        "name" to "",
+        "about" to "",
+        "eduAi" to "true",
     )
 }
 

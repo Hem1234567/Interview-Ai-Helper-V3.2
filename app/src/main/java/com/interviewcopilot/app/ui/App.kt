@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ fun AppRoot(vm: CopilotVM) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var settingsStart by rememberSaveable { mutableStateOf(SettingsPage.Root) }
+    var engineSheet by remember { mutableStateOf(false) }
     BackHandler(enabled = !settingsOpen && tab != 0) { tab = 0 }
 
     Box(Modifier.fillMaxSize().background(c.background)) {
@@ -68,11 +70,12 @@ fun AppRoot(vm: CopilotVM) {
                         vm,
                         onOpenSettings = { settingsStart = SettingsPage.Root; settingsOpen = true },
                         onOpenModels = { settingsStart = SettingsPage.LocalModels; settingsOpen = true },
+                        onOpenEngines = { engineSheet = true },
                     )
 
-                    1 -> PracticeScreen(vm)
+                    1 -> PersonalScreen(vm)
 
-                    2 -> JobsScreen(vm)
+                    2 -> AiScreen(vm, onOpenModels = { settingsStart = SettingsPage.LocalModels; settingsOpen = true })
 
                     else -> HistoryScreen(vm)
                 }
@@ -80,12 +83,14 @@ fun AppRoot(vm: CopilotVM) {
             Glass(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth()) {
                 Row(Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TabBarItem("Assistant", Sym.mic, tab == 0, Modifier.weight(1f)) { tab = 0 }
-                    TabBarItem("Practice", Sym.book, tab == 1, Modifier.weight(1f)) { tab = 1 }
-                    TabBarItem("Jobs", Sym.briefcase, tab == 2, Modifier.weight(1f)) { tab = 2 }
+                    TabBarItem("Personal", Sym.person, tab == 1, Modifier.weight(1f)) { tab = 1 }
+                    TabBarItem("AI", Sym.sparkles, tab == 2, Modifier.weight(1f)) { tab = 2 }
                     TabBarItem("History", Sym.clock, tab == 3, Modifier.weight(1f)) { tab = 3 }
                 }
             }
         }
+
+        EngineSheet(vm, engineSheet, onDismiss = { engineSheet = false }, onOpenAiTab = { tab = 2 })
 
         AnimatedVisibility(
             visible = settingsOpen,

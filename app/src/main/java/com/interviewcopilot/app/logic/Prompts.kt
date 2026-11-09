@@ -71,6 +71,7 @@ object Prompts {
         resume: String,
         job: String,
         vocab: String,
+        profile: String,
         history: List<Pair<String, String>>,
         question: String,
         extra: String,
@@ -78,6 +79,7 @@ object Prompts {
         val sys = StringBuilder()
         sys.append(BASE).append("\n").append(modePrompt(mode)).append("\n")
             .append(styleLine(style)).append("\n").append(lengthLine(speed))
+        if (profile.isNotBlank()) sys.append("\n\nCANDIDATE PROFILE (use for questions about the candidate, never invent more):\n").append(profile.take(500))
         if (resume.isNotBlank()) sys.append("\n\nCANDIDATE RESUME:\n").append(resume.take(1200))
         if (job.isNotBlank()) sys.append("\n\nTARGET JOB:\n").append(job.take(800))
         if (vocab.isNotBlank()) sys.append("\n\nTERMS (correct spellings): ").append(vocab.replace("\n", ", ").take(300))
