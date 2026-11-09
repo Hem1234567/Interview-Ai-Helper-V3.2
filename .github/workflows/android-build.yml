@@ -31,11 +31,19 @@ jobs:
       - name: Colour and Material rules
         run: ./scripts/check-colors.sh
 
+      - name: Cache ktlint
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ktlint
+          key: ktlint-${{ env.KTLINT_VERSION }}-${{ env.KTLINT_SHA256 }}
+
       - name: ktlint
         run: |
-          curl -sSfL -o ktlint "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
-          echo "${KTLINT_SHA256}  ktlint" | sha256sum -c -
-          chmod +x ktlint
+          if [ ! -f ktlint ]; then
+            curl -sSfL --retry 5 --retry-delay 3 -o ktlint "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
+            echo "${KTLINT_SHA256}  ktlint" | sha256sum -c -
+            chmod +x ktlint
+          fi
           ./ktlint "app/src/**/*.kt" "*.kts" "app/*.kts"
 
       - name: Set up JDK 17
